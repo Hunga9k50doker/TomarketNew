@@ -1,7 +1,7 @@
 const fs = require("fs");
 const { parse } = require("querystring");
 
-async function saveToken(accountIndex, token) {
+async function saveToken(token) {
   let tokens = {};
   const parser = parse(token);
   const user = JSON.parse(parser.user);
@@ -17,6 +17,6 @@ async function saveToken(accountIndex, token) {
 (async function convertQueryIds() {
   const accounts = fs.readFileSync("query.txt", "utf-8").replace(/\r/g, "").split("\n").filter(Boolean);
   for (let i = 0; i < accounts.length; i++) {
-    await saveToken(i, accounts[i]);
+    await saveToken(accounts[i]);
   }
 })();

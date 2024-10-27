@@ -32,6 +32,8 @@ const settings = {
 
   USE_PROXY_FROM_JS_FILE: process.env.USE_PROXY_FROM_JS_FILE ? process.env.USE_PROXY_FROM_JS_FILE.toLowerCase() === "true" : false,
 
+  CONNECTWALLET: process.env.CONNECTWALLET ? process.env.CONNECTWALLET.toLowerCase() === "true" : false,
+
   CODE_DAILY: process.env.CODE_DAILY ? process.env.CODE_DAILY.trim() : "1,2,3",
   MAIN_ACCOUNT_ID: process.env.MAIN_ACCOUNT_ID ? process.env.MAIN_ACCOUNT_ID : null,
 

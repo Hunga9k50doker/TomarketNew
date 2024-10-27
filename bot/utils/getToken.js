@@ -15,7 +15,7 @@ function get(id) {
 }
 
 function isExpired(token) {
-  const [header, payload, sign] = token.split(".");
+  const [header, payload, sign] = token?.split(".");
   const decodedPayload = Buffer.from(payload, "base64").toString();
 
   try {

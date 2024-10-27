@@ -2,11 +2,14 @@ const app = require("../config/app");
 const logger = require("../utils/logger");
 const sleep = require("../utils/sleep");
 const _ = require("lodash");
+const fs = require("fs");
+const colors = require("colors");
 
 class ApiRequest {
   constructor(session_name, bot_name) {
     this.session_name = session_name;
     this.bot_name = bot_name;
+    this.wallets = this.loadWallets("wallets.txt");
   }
 
   async get_user_data(http_client) {
@@ -188,6 +191,111 @@ class ApiRequest {
       } else {
         logger.error(`<ye>[${this.bot_name}]</ye> | ${this.session_name} | Error while <b>starting stars claim puzzle:</b>: ${error.message}`);
       }
+      return null;
+    }
+  }
+
+  ///handle wallets
+
+  async loadWallets(file) {
+    let wallets = [];
+    wallets = fs.readFileSync(file, "utf-8").split("\n").filter(Boolean);
+    if (wallets.length <= 0) {
+      console.log(colors.red(`Không tìm thấy ví`));
+      process.exit();
+    } else {
+      wallets = wallets.map((wallet) => `${this.session_name} | ${wallet}`);
+    }
+    return wallets;
+  }
+
+  async submitWalletAddress(http_client) {
+    let walletAddress = this.wallets.find((wallet) => wallet.startsWith(this.session_name));
+    if (!walletAddress) {
+      console.log(colors.red(`Không tìm thấy địa chỉ ví cho ${this.session_name}`));
+      return false;
+    }
+
+    walletAddress = walletAddress?.split(" | ")[1]?.trim();
+    const data = JSON.stringify({ wallet_address: walletAddress });
+
+    const maxRetries = 5;
+    let retries = 0;
+
+    while (retries < maxRetries) {
+      try {
+        const res = await http_client.post(`${app.apiUrl}/tomarket-game/v1/tasks/address`, JSON.stringify(data));
+        console.log(res);
+        if (res.status === 200 && res.data.status === 0 && res.data.data === "ok") {
+          console.log(colors.green(`Liên kết ví thành công cho ${this.session_name}`));
+          return true;
+        } else if (res.status === 200 && res.data.message === "System error please wait") {
+          console.log(colors.yellow(`Lỗi hệ thống, thử lại lần ${retries + 1} cho ${this.session_name}`));
+          retries++;
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          continue;
+        } else if (res.status === 500) {
+          if (res.data.message === "Verification failed, Ton address is not from Bitget Wallet") {
+            console.log(colors.red(`Ví ton không được tạo từ bitget wallet cho ${this.session_name}`));
+            return false;
+          }
+        }
+
+        console.log(colors.red(`Gửi địa chỉ ví không thành công cho ${this.session_name}! Mã trạng thái: ${res.status}, Thông báo: ${res.data.message}`));
+        return false;
+      } catch (error) {
+        console.log(colors.red(`Lỗi khi gửi địa chỉ ví cho ${this.session_name}: ${error.message}`));
+        retries++;
+        if (retries < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        } else {
+          return false;
+        }
+      }
+    }
+
+    console.log(colors.red(`Đã thử gửi địa chỉ ví ${maxRetries} lần không thành công cho ${this.session_name}`));
+    return false;
+  }
+
+  async connectWallet(http_client) {
+    try {
+      const existingWalletAddress = await this.getWallets(http_client);
+      if (!existingWalletAddress) {
+        const walletSubmitted = await this.submitWalletAddress(http_client);
+        if (!walletSubmitted) {
+          console.log(colors.yellow(`Không thể gửi địa chỉ ví cho ${this.session_name}. Tiếp tục với các tác vụ khác.`));
+        }
+      } else {
+        console.log(colors.yellow(`Địa chỉ ví đã tồn tại cho ${this.session_name}: ${existingWalletAddress}`));
+      }
+    } catch (error) {
+      console.log(colors.red(`Lỗi khi xử lý wallet task cho ${this.session_name}: ${error.message}`));
+    }
+  }
+
+  async saveWallet(val) {
+    try {
+      const data = fs.readFileSync("walletsConnected.txt", "utf-8").split("\n").filter(Boolean);
+      if (!data.includes(val)) {
+        const newItem = `\n${this.session_name} | ${val}`;
+        fs.appendFileSync("walletsConnected.txt", newItem);
+      }
+    } catch (err) {
+      console.error("Không thể xử lý file:", err);
+    }
+  }
+
+  async getWallets(http_client) {
+    try {
+      const res = await http_client.post(`${app.apiUrl}/tomarket-game/v1/tasks/walletTask`, {});
+      // console.log(res.data.data.walletAddress);
+      if (res?.data?.data?.walletAddress) {
+        await this.saveWallet(res.data.data.walletAddress);
+        return res?.data?.data?.walletAddress;
+      }
+      return null;
+    } catch (error) {
       return null;
     }
   }

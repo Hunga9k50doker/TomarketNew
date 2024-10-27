@@ -140,11 +140,13 @@ class NonSessionTapper {
     }
     console.log(colors.yellow(`${this.session_name} |Token không được tìm thấy hoặc đã hết hạn ${id}. đăng nhập...`));
     try {
-      token = await this.#get_access_token(tg_web_data, http_client);
-      if (token) {
-        save(id, token);
+      const res = await this.#get_access_token(tg_web_data, http_client);
+      const accessToken = res?.data?.access_token;
+      if (accessToken) {
+        token = accessToken;
+        save(id, accessToken);
         console.log(colors.green(`${this.session_name} Đã lấy token cho tài khoản ${id}`));
-        isExpired(token);
+        isExpired(accessToken);
       } else {
         console.log(colors.red(`${this.session_name} Không lấy được token cho tài khoản ${id}`));
       }
@@ -240,6 +242,12 @@ class NonSessionTapper {
 
         await sleep(3);
 
+        if (settings.CONNECTWALLET) {
+          await this.api.connectWallet(http_client);
+        }
+        // process.exit();
+        await sleep(2);
+
         if (rank_data?.data?.isCreated == false && rank_data?.status === 0) {
           //log check rank data
           logger.info(`<ye>[${this.bot_name}]</ye> | ${this.session_name} | Evaluating Rank...`);
@@ -297,32 +305,6 @@ class NonSessionTapper {
           }
         }
         await sleep(3);
-
-        //Daily combo
-        if (settings.AUTO_CLAIM_COMBO && next_combo_check < currentTime && !_.isEmpty(settings.CODE_DAILY)) {
-          const combo_info = await this.api.getPuzzle(http_client);
-          const combo_info_data = combo_info?.data[0] || [];
-          // process.exit(0);
-          if (combo_info?.status == 0 && !_.isEmpty(combo_info_data)) {
-            if (combo_info_data?.status > 0) {
-              logger.info(`<ye>[${this.bot_name}]</ye> | ${this.session_name} | Combo already claimed | Skipping....`);
-            } else if (combo_info_data?.status == 0 && new Date(combo_info_data?.endTime) > new Date()) {
-              const data = {
-                task_id: combo_info_data?.taskId,
-                code: `${settings.CODE_DAILY}`,
-              };
-              const claim_combo = await this.api.claimPuzzle(http_client, data);
-              if (claim_combo?.status == 0) {
-                logger.info(
-                  `<ye>[${this.bot_name}]</ye> | ${this.session_name} | 🎉 Claimed combo | Points: <gr>+${combo_info_data?.score}</gr> | Tikets: <ye>${combo_info_data?.games}</ye> | Star: <ye>${combo_info_data?.star}</ye>`
-                );
-              } else {
-                logger.warning(`<ye>[${this.bot_name}]</ye> | ${this.session_name} | ⚠️ Error while claiming combo: ${claim_combo?.message}`);
-              }
-            }
-            next_combo_check = _.floor(new Date(combo_info_data?.endTime).getTime() / 1000);
-          }
-        }
 
         //Claiming stars
         if (settings.AUTO_CLAIM_STARTS && next_stars_check < currentTime) {
@@ -416,6 +398,7 @@ class NonSessionTapper {
 
         await sleep(3);
 
+        //Task
         if (settings.AUTO_TASKS) {
           const STM = await ST();
           if (!_.isNull(STM)) {
@@ -423,6 +406,35 @@ class NonSessionTapper {
             await st.play();
           }
         }
+
+        await sleep(3);
+
+        //Daily combo
+        if (settings.AUTO_CLAIM_COMBO && next_combo_check < currentTime && !_.isEmpty(settings.CODE_DAILY)) {
+          const combo_info = await this.api.getPuzzle(http_client);
+          const combo_info_data = combo_info?.data[0] || [];
+          // process.exit(0);
+          if (combo_info?.status == 0 && !_.isEmpty(combo_info_data)) {
+            if (combo_info_data?.status > 0) {
+              logger.info(`<ye>[${this.bot_name}]</ye> | ${this.session_name} | Combo already claimed | Skipping....`);
+            } else if (combo_info_data?.status == 0 && new Date(combo_info_data?.endTime) > new Date()) {
+              const data = {
+                task_id: combo_info_data?.taskId,
+                code: `${settings.CODE_DAILY}`,
+              };
+              const claim_combo = await this.api.claimPuzzle(http_client, data);
+              if (claim_combo?.status == 0) {
+                logger.info(
+                  `<ye>[${this.bot_name}]</ye> | ${this.session_name} | 🎉 Claimed combo | Points: <gr>+${combo_info_data?.score}</gr> | Tikets: <ye>${combo_info_data?.games}</ye> | Star: <ye>${combo_info_data?.star}</ye>`
+                );
+              } else {
+                logger.warning(`<ye>[${this.bot_name}]</ye> | ${this.session_name} | ⚠️ Error while claiming combo: ${claim_combo?.message}`);
+              }
+            }
+            next_combo_check = _.floor(new Date(combo_info_data?.endTime).getTime() / 1000);
+          }
+        }
+
         await sleep(3);
 
         // Play game
